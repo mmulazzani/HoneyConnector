@@ -1,5 +1,11 @@
 import random
 
+# so... what you are now looking at are the remains of a improved mail module I had in mind during development, when I
+# thought I would transfer contents of e-mails from the IMAP server to the client
+# this idea was abandoned after checking the behaviour of Thunderbird and because of time constraints
+
+# the reason for this class was to populate mailboxes with random e-mails of certain categories with certain possibilities.
+# not used at the moment, but maybe one day down the line this might be useful, so I still included this
 
 def getWeightedRandom(setList):
     maxOccurance = sum(setList)
