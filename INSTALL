@@ -1,0 +1,95 @@
+Install instructions
+==============
+
+**PLEASE NOTE:** These instructions are currently being written and tested. Sorry for any inconveniences.
+
+Hello and welcome to the HoneyConnector install instructions!  
+This will be a bumpy road, so please don't get depressed over something not working and be sure to grab enough coffee.
+
+The install will be divided in the following steps:
+1. Preparing the systems
+2. Preparing the database
+3. Configuring the client
+4. Configuring the IMAP module
+5. Configuring the FTP module
+6. Let them communicate!
+
+
+1. Preparing the sytems
+--------
+
+Debian 7.0 Wheezy was used when deploying HoneyConnector and is used in these install instructions. It should be adaptable without any problems to other APT based distributions, but you might need some more research for package names when using other distributions such as Gentoo, Arch or RPM based distros.
+
+The following core packages should be installed on every machine:  
+python2.7 python2.7-crypto python2.7-psycopg2
+
+The following packages should be installed on the machine of the PostgreSQL server:  
+postgresql-9.1
+
+The following packages should be installed on the machine of the IMAP server module:  
+mysql-server dovecot-imapd dovecot-mysql postfix postfix-mysql python2.7-mysqldb
+(please note: This will remove exim4 because of dependency blocks, so you can simply press "y" when apt wants do resolve some conflicts)
+
+2. Preparing the database
+--------
+
+Well, this step is fairly simple. First, you should create a new user and database for HoneyConnector.  
+If you don't know the instructions by heart, here are the instructions to create a new user for the common HoneyConnector database. Be sure you are logged in as root. Please read them first and the description afterwards, so you understand what you are doing on your system.
+
+	# su postgres
+	# createuser --pwprompt --no-createdb --no-superuser --no-createrole honeyconnector
+	# createdb --owner=honeyconnector --encoding=UTF8 honeyconnector
+	# exit
+	
+First, you change user to the postgres system user, which has admin privileges on the server.  
+With the second command, you create a new user named "honeyconnector". You will be prompted for a password.  
+The third command creates a new database named "honeyconnector" which belongs to the newly created user.  
+And last but not least, we go back to being root on our system.
+
+Now you can import the database dump "main-db-postgresql.sql" located in "doc/sql-dumps" onto the database with your favourite database administration tool.
+
+TODO:
+- pg_hba.conf
+- restart services
+- consideration: own user for every component
+
+3. Configuring the client
+--------
+
+TODO:
+- change secret and domain
+- download stem
+- download password/username files
+
+
+4. Configuring the IMAP module
+--------
+
+TODO:
+- change secret
+- create new MySQL user
+- import MySQL dump
+- change domain in database
+- import configs
+- change domain in configs
+- make sure everything is chmodded
+- restart sevices
+
+
+5. Configuring the FTP module
+--------
+
+TODO:
+- change secret
+- create bait data
+- configure bait data
+- iptables
+
+6. Let them communicate!
+--------
+
+TODO:
+- start server modules
+- start client
+- watch it work or troubleshoot
+- considerations: tunnel through SSH for PostgreSQL
