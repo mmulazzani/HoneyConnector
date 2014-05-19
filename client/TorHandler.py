@@ -7,10 +7,16 @@ from stem.util import term
 from stem.control import Controller
 from stem.descriptor.remote import DescriptorDownloader
 
+# the port Tor runs on
 SOCKS_PORT = 7000
+
+# the IP of your FTP server
 FTP_SERVER_IP = "88.198.161.146"
+
+# the IP of your IMAP server
 IMAP_SERVER_IP = "37.187.52.237"
 
+# this class is used to save the information about the Tor node to be processed or while being processed
 class TorNode:
     madeFTPLogin = False
     madeIMAPLogin = False
@@ -33,17 +39,18 @@ class TorNode:
         
     
 
-# Perform DNS resolution through the socket
-
+# Perform DNS resolution through the socket - i think this was from a tutorial
 def getaddrinfo(*args):
     return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', (args[0], args[1]))]
 
 socket.getaddrinfo = getaddrinfo
 
+# Another funny callback function to help, this is from the stem tutorial as far as I remember...
 def print_bootstrap_lines(line):
     if "Bootstrapped " in line:
         print term.format(line)
 
+# Adds an Tor node to the queue in the database
 def addItemToQueue(dbConnection, desc, now, i):
     nickname = desc.nickname
     fingerprint = desc.fingerprint
@@ -68,10 +75,12 @@ def addItemToQueue(dbConnection, desc, now, i):
     else:
         print i, "skipping", nickname, fingerprint, address, published, uptime, contact, queueTimestamp, hasHTTPS, hasIMAP, hasFTP
 
-
+# Fills the queue.
+# IMPORTANT: Set your own control password here
 def fillQueue(dbConnection):
     print term.format("Starting Tor:\n")
 
+    # Launch Tor
     tor_process = stem.process.launch_tor_with_config(
       config = {
         'SocksPort': str(SOCKS_PORT),
@@ -87,8 +96,10 @@ def fillQueue(dbConnection):
     while not downloadSuccessful:
         try:
             controller = Controller.from_port(port = 9051)
+            # IMPORTANT: Change the password to the fitting "HashedControlPassword" set in the Torrc by stem, a few lines above here 
             controller.authenticate("schnitzel")
             downloader = DescriptorDownloader()
+            # Now tefth those servers and add them to the queue
             serverDescriptors =downloader.get_server_descriptors().run()
             i = 1
             for desc in serverDescriptors:
@@ -101,11 +112,12 @@ def fillQueue(dbConnection):
             print e
             errorCount = errorCount + 1
             if (errorCount >= 5):
-                print "HUGE CLUSTERFUCK, stopping execution, sending mail"
+                print "HUGE CLUSTERFUCK, stopping execution"
                 tor_process.kill()  # stops tor
                 raise
     tor_process.kill()  # stops tor
 
+# Fetches a node from the queue and returns a Tor node object
 def getNextNodeFromQueue(dbConnection):
     cur = dbConnection.cursor()
     SQLstring = """SELECT * FROM "queue" ORDER BY "queueTimestamp", "uptime" LIMIT 1;"""
@@ -127,19 +139,21 @@ def getNextNodeFromQueue(dbConnection):
     currentNode = TorNode(nodeid, nickname, fingerprint, address, published, uptime, contact, queueTimestamp, hasHTTPS, hasIMAP, hasFTP, exitPolicies, platformVersion)
     return currentNode
     
-
+# Checks if a node with a certain fingerprint is already in the database of nodes
 def isNodeInDB(dbConnection, currentNode):
     cur = dbConnection.cursor()
     cur.execute("""SELECT COUNT(*) FROM "knownNodes" WHERE "fingerprint" = %s;""", (currentNode.fingerprint,))
     r = cur.fetchone()[0]
     return r == 1
 
+# Checks if a node's IP is already in the database
 def isNodeIPInDB(dbConnection, currentNode):
     cur = dbConnection.cursor()
     cur.execute("""SELECT COUNT(*) FROM "knownNodeIPs" WHERE "fingerprint" = %s AND "address" = %s;""", (currentNode.fingerprint, currentNode.address))
     r = cur.fetchone()[0]
     return r == 1
 
+# Updates the node in the database after it was processed in the queue
 def updateNodeInDB(dbConnection, currentNode):
     FTPLogin = 0
     IMAPLogin = 0
@@ -155,6 +169,7 @@ def updateNodeInDB(dbConnection, currentNode):
     cur.execute("""UPDATE "knownNodes" SET "lastSeen" = %s, "countIMAPLogins" = "countIMAPLogins" + %s, "countFTPLogins" = "countFTPLogins" + %s, "countSSLChecks" = "countSSLChecks" + %s, "exitPolicies" = %s, "platformVersion" = %s  WHERE "fingerprint" = '"""+currentNode.fingerprint+"""';""", (currentNode.queueTimestamp, IMAPLogin, FTPLogin, SSLCheck, currentNode.exitPolicies, currentNode.platformVersion))
     dbConnection.commit()
 
+# Adds a new node to the database of nodes
 def addNodeToDB(dbConnection, currentNode):
     FTPLogin = 0
     IMAPLogin = 0
@@ -170,17 +185,20 @@ def addNodeToDB(dbConnection, currentNode):
     dbConnection.commit()
     pass
 
+# Adds a new node IP to the database of note IPs
 def addNodeIPToDB(dbConnection, currentNode):
     cur = dbConnection.cursor()
     cur.execute("""INSERT INTO "knownNodeIPs" ("fingerprint", "address") VALUES (%s, %s);""", (currentNode.fingerprint, currentNode.address))
     dbConnection.commit()
     pass
 
+# Remove a specific node from the database, after it has been processed
 def removeNodeFromQueue(dbConnection, currentNode):
     cur = dbConnection.cursor()
     cur.execute("""DELETE FROM "queue" WHERE "id" = %s;""", (currentNode.nodeid,))
     dbConnection.commit()
 
+# Checks if a node is already in the DB - if yes, it gets updated, if not, a new node is created. Same with the IPs. After that, the node is discarded from tue queue
 def saveChangesToDB(dbConnection, currentNode):
     if isNodeInDB(dbConnection, currentNode):
         updateNodeInDB(dbConnection, currentNode)
@@ -191,6 +209,7 @@ def saveChangesToDB(dbConnection, currentNode):
         addNodeIPToDB(dbConnection, currentNode)
     removeNodeFromQueue(dbConnection, currentNode)
 
+# Checks if the queue of Tor nodes to process is empty
 def isQueueEmpty(dbConnection):
     cur = dbConnection.cursor()
     cur.execute("""SELECT COUNT(*) FROM "queue";""")

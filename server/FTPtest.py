@@ -9,8 +9,11 @@ from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 from pyftpdlib.authorizers import DummyAuthorizer
 
+# This is the HoneyConnector FTP server module
+# Much of this is based upon a tutorial how to use pyFTPd
 class FTPtest(threading.Thread):
     
+    # Start the FTP server in a thread with a dummy authorizer, where we can later on feed users to
     def __init__(self):
         threading.Thread.__init__(self)
         # Instantiate a dummy authorizer for managing 'virtual' users
@@ -25,7 +28,9 @@ class FTPtest(threading.Thread):
         #handler.masquerade_address = '151.25.42.11'
         #handler.passive_ports = range(60000, 65535)
     
-        # Instantiate FTP server class and listen on 0.0.0.0:2121
+        # Instantiate FTP server class and listen on every IP address of the machine on port 2121
+        # If you use this port, please use the iptables command provided in the installation documentation
+        # If you configured your system so users can listen on ports below 1024, you can set this to 21 and fotget the command
         self.address = ('', 2121)
         self.server = FTPServer(self.address, self.handler)
     
@@ -33,17 +38,18 @@ class FTPtest(threading.Thread):
         self.server.max_cons = 256
         self.server.max_cons_per_ip = 5
         
+    # Define a new user having full r/w permissions and a read-only
     def addUser(self, username, password):
-        # Define a new user having full r/w permissions and a read-only
-        # anonymous user
         directory = os.getcwd()+"/testdata"
         print "adding user " + username + " and pw " + password
         self.authorizer.add_user(username, password, directory, perm="elradfmw")
     
+    # Removes an user from the server
     def delUser(self, username):
         self.authorizer.remove_user(username)
         print "deletd user", username
         
+    # Get some random directories to create within the server
     def getRandomDirs(self):
         htdocDirs = ["htdocs", "www", "www-data", "htdoc", "web"]
         htdocDir = random.choice(htdocDirs)
@@ -53,18 +59,23 @@ class FTPtest(threading.Thread):
         numOfDirs = random.randrange(0, numOfPossibleDirs)
         return random.sample(set(dirs), numOfDirs)
     
+    # Get some random timestamps between the set start timestamp and now, so the timestamps on the server aren't weird
     def getRandomTimestamp(self):
         endTimestamp = time.time()
         startTimestamp = 1353073006.547738
         return startTimestamp + random.random() * (endTimestamp - startTimestamp)
         
+    # Copy a random subset of data from the possibledata directory to the FTP server directory - then create some random directorys
     def populateFiles(self):    
-        # populate ftp server
+        # The path to the bait and safe data
         source = os.getcwd()+"/possibledata/"
+        # The path to the FTP server directory
         destination = os.getcwd()+"/testdata/"
+        # The uid and gid of the current user
         currentUser = os.getuid()
         currentGroup = os.getegid()
         
+        # Whipe the whole directory the server had before and create a new one
         shutil.rmtree(destination, ignore_errors = True)
         os.mkdir(destination)
         
@@ -72,6 +83,7 @@ class FTPtest(threading.Thread):
         for fileToRemove in filesToCleanUp:
             os.remove(destination + fileToRemove)
         
+        # Get the random subset of files from the bait and safe data and copy them into the FTP directory
         allPossibleFiles = os.listdir(source)
         print allPossibleFiles
         numOfPossibleFiles = len(allPossibleFiles)
@@ -86,6 +98,7 @@ class FTPtest(threading.Thread):
             fileTimestamp = self.getRandomTimestamp()
             os.utime(dstFile, (fileTimestamp, fileTimestamp))
         
+        # Create the random directories
         dirsToCreate = self.getRandomDirs()
         for dirToCreate in dirsToCreate:
             dstPath = destination + dirToCreate
@@ -93,10 +106,10 @@ class FTPtest(threading.Thread):
             dirTimestamp = self.getRandomTimestamp()
             os.utime(dstPath, (dirTimestamp, dirTimestamp))
                 
+    # start the FTP server
     def run(self):
-        # start ftp server
         self.server.serve_forever()
-        
+
+    # stop the FTP server     
     def stop(self):
-        #stop ftp server
         self.server.close_all()
