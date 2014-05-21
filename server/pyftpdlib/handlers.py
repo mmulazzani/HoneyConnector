@@ -67,7 +67,7 @@ from pyftpdlib.ioloop import AsyncChat, Connector, Acceptor, _DISCONNECTED
 from pyftpdlib.authorizers import (DummyAuthorizer, AuthenticationFailed,
                                    AuthorizerError)
 
-sqlString = "dbname='torlog' user='logger' host='127.0.0.1' password='H0f3hL0VUyXCrZpunVUVnhsob'"
+sqlString = "dbname='honeyconnector' user='honeyconnector' host='127.0.0.1' password='H0f3hL0VUyXCrZpunVUVnhsob'"
 
 proto_cmds = {
     'ABOR' : dict(perm=None, auth=True, arg=False,

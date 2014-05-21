@@ -12,7 +12,7 @@ class LogExtractor():
     # The domain your email honeypot uses
     domainAt = "@hypermailer.net"
     # the connection to the common PostgreSQL database with databasename, user, host and the password used
-    dbConnectionString = "dbname='torlog' user='logger' host='127.0.0.1' password='H0f3hL0VUyXCrZpunVUVnhsob'"
+    dbConnectionString = "dbname='honeyconnector' user='honeyconnector' host='127.0.0.1' password='H0f3hL0VUyXCrZpunVUVnhsob'"
     # before this point of time, the logger will ignore everything in the logfile before the initial import
     # gets used for the time the last log was parsed
     lastLog = datetime.datetime(2013, 4, 9, 1, 28, 30)

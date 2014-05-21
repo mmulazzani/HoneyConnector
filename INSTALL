@@ -10,9 +10,10 @@ The install will be divided in the following steps:
 1. Preparing the systems
 2. Preparing the database
 3. Configuring the client
-4. Configuring the IMAP module
-5. Configuring the FTP module
-6. Let them communicate!
+4. Configuring the generic server module
+5. Configuring the IMAP module
+6. Configuring the FTP module
+7. Let them communicate!
 
 
 1. Preparing the sytems
@@ -26,9 +27,13 @@ python2.7 python2.7-crypto python2.7-psycopg2
 The following packages should be installed on the machine of the PostgreSQL server:  
 postgresql-9.1
 
+The following packages should be installed on the machine of the client:  
+tor
+
 The following packages should be installed on the machine of the IMAP server module:  
 mysql-server dovecot-imapd dovecot-mysql postfix postfix-mysql python2.7-mysqldb
 (please note: This will remove exim4 because of dependency blocks, so you can simply press "y" when apt wants do resolve some conflicts)
+
 
 2. Preparing the database
 --------
@@ -48,48 +53,124 @@ And last but not least, we go back to being root on our system.
 
 Now you can import the database dump "main-db-postgresql.sql" located in "doc/sql-dumps" onto the database with your favourite database administration tool.
 
-TODO:
-- pg_hba.conf
-- restart services
-- consideration: own user for every component
+After this, you need to edit the connection configuration of PostgreSQL, to allow connections to the database from remote systems. Open up /etc/postgresql/9.1/main/pg_hba.conf and add a line like this for each remote system:
+
+	host	honeyconnector	honeyconnector	<ip address of remote system>/32	password
+
+Also, be sure that your PostgreSQL is actually listening, by checking /etc/postgresql/9.1/main/postgresql.conf if "listen_addresses = '*'" is set in there. 
+
+Now you can restart PostgreSQL with "service postgresql restart" or "/etc/init.d/postgresql restart".
+
+Something to consider here is to create one user each for the server modules. Since the modules are more prone to be compromised, it could be wise to create one user each for every module, so you can revoke the privileges of one module when it was compromised, or you can cut the account's privileges down to only be able to insert new data into the database.
+
 
 3. Configuring the client
 --------
 
-TODO:
-- change secret and domain
-- download stem
-- download password/username files
+First, you should generate a new secret for the encryption between client and server modules. You can generate something new with the following lines in a short python script:
 
+	import os
+	import binascii
+	BLOCK_SIZE = 32
+	secret1 = os.urandom(BLOCK_SIZE)
+	secret1 = binascii.hexlify(secret1)
+	print secret1
 
-4. Configuring the IMAP module
+Open client/ClientMain.py. Insert the output of the script in "keyHex", line 34. Save the hexed key, because you will need it further down the line for the server modules.
+
+You will also have to change "dbConnectionString" on line 24 to change the database connection string according to the PostgreSQL user and password of the HoneyConnector client module.
+
+Some stuff you can change around, but won't need to is "port" on line 26, where the port number of the honeyconnector control messages is set, and "SOCKS_PORT" on line 22, on which port the socks port the Tor service should run on.
+
+You will need some password files for the IMAP user creation. You can get some from https://wiki.skullsecurity.org/Passwords - for the tests "honeynet.txt" was used as the password file (set in line 254 of ClientMain.py), and "facebook-firstnames.txt" was used for the usernames files (set in line 249 of ClientMain.py). You can change this around as you like.
+
+Now you should set the IP addresses of the other modules:
+- On line 437, you need to change the IP address and the domain used by the IMAP server.
+- On line 449, you need to change the IP address used by the FTP server.
+
+Something you can do as well, is in line 348: The sites where the SSL certificates should be changed. Just remove and add any URLs as you like.
+
+Last but not least, in line 133 is the function "hasBaitFileName(fileName)" - this decides if a file on the FTP server is considered a bait file which will never be downloaded, or can be downloaded. Further instructions for this will be given during the FTP module configuration.
+
+4. Configuring the generic server module
 --------
 
+Wherever you will install an instance of the HoneyConnector server, you will need to use the generic server module, which handles the communication between the client and the server, alongside with forwarding commands to the right modile (i.e. IMAP or FTP).
+
+You can find it in server/ServerMain.py.
+
+In line 27, you should change the "keyHex" to the value you generated previously and used for configuring the client. In line 17, please change the port for the HoneyConnector control connections if you used another one in your client config.
+
+When started, ServerMain.py automatically starts an FTP server. If you don't want this behaviour on your IMAP instance, you can comment out line 51 to 54 in "__init__(self)".
+
+Additionally, to be on the safe side, you can comment out the if statements for the control messages of the services you do not want to use from line 114 on.
+
+5. Configuring the IMAP module
+--------
+
+Okay, buckle up, this is going to be a tough one. If you already know how to configure a Dovecot MTA with MySQL backend and password debug logging, it might be easier when you do this on your own and just adapt the HoneyConnector part in "server/IMAPTest.py" so it goes along nicely.
+
+First, create a new MySQL database on the IMAP server called "mailserver". Then import the dump "mailserver-db-mysql.sql" and create a user which can connect locally to that database and change data in there. How to do this? Okay, I might have cheated here a bit, and used phpMyAdmin for this - shame on me.
+
+Next up, you need to change the domain in the database to the one you will be using for the IMAP HoneyConnector. Go into the database "virtual_domains" and change the entry "example.com" to your domain. Why is the domain important? Because it's part of the username. And it makes the connection more credible.
+
 TODO:
-- change secret
-- create new MySQL user
-- import MySQL dump
-- change domain in database
 - import configs
 - change domain in configs
+- change dataabse in configs
 - make sure everything is chmodded
 - restart sevices
 
+On the IMAP server, you will need another module for actually logging the login attempts to the shared PostgreSQL database. For this, use "logging/LogExtractor.py". In line 13 there, change the @domain.part, so it shows the domain with a preceeding @. Additionally, you will need to change the database connection string at line 15.
 
-5. Configuring the FTP module
+Next up, you will need to look where your Dovecot login info log is stored, normally it should be "/var/log/dovecot-info.log", which is declared in line 9. Before making your first measurements, you should copy the current version of this log file in the same directory as "LogExtractor.py", and make sure both files are readable by HoneyConnector's user, and the latter writable. This working copy will be used to check when the last logging batch was processed, so no duplicates will be inserted into the database. If you want to change the path of your working copy, you can do this in line 11.
+
+Something you could consider too is installing a webserver on your server. Why? Because of HTTP access logs. If some user wants to add an e-mail address in Thunderbird via the automatic configuration wizard, it will request a XML file from the server. You will see this in the HTTP server access log, so you can trace the client better and laugh at them.
+
+6. Configuring the FTP module
 --------
 
-TODO:
-- change secret
-- create bait data
-- configure bait data
-- iptables
+Congratulations, you made it this far! This might be the easiest thing configure here, so take a good sip out of your coffee and pat yourself on the back after making it through the IMAP-MySQL labyrinth.
 
-6. Let them communicate!
+There are only three things you need to do with the FTP server: Feed it with bait data, configuring PostgreSQL access and configuring the FTP port. First, we will take a look at the bait data.
+
+You might have noticed the folder "server\possibledata" - a random subset of these files will be copied into the shared directory of the FTP server once the FTP server gets populated after an account was created. Feel free to add data in here, get creative, paint something in GIMP and show those sniffers some happy little clouds.
+
+You should divide your data in two different categories:  
+- Safe data, which can be transferred. Just like your GIMP painting you just made, or some funny cat pictures you found in the deepest depths of the internet.
+- Pure bait data, which should never be transferred. These data are only here to look great in the directory listing the FTP cient gets, but make sure their contents are nonsensical. So don't put your PayPal login data and credit card data there, just smash your hands on the keyboard for the contents of the files and chose an interesting name. Exmaples for these files are already in the folder "possibledata".
+
+If you added some new pure bait data, you still need to make sure the client will never request them. I already said this before, you need to go to line 133 "def hasBaitFileName(fileName)" in "client/ClientMain.py". Here you can add your own patterns of bait data in the if-statement.
+
+Now, you only need to create a new directory in the "server" directory, called "testdata". Or, if you change line 43 in "FTPtest.py", you can call it whatever pleases you. Just make sure the user the script runs with has the ability to write in this folder.
+
+During population of the files, directories will be created additinally. Those directories can be empty and will never be traversed during a HoneyConnection. In line 53 on "FTPtest.py" in the function "getRandomDirs", you can see and configure the names of those directories.
+
+But now, let's talk about ports. In line 34 in FTPTest.py, you can set the port the FTP server listens on. It is currently set on port 2121, since ports below 1024 are reserved for root. You can now either change this to port 21 and configure the system so users can use that port. Another possibility is to forward port 21 to 2121 with the following command:
+
+	iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 21 -j REDIRECT --to-port 2121
+
+Last but not least, we need to change the database connection string. You can find it in "server/pyftpdlib/handlers.py" on line 70.
+
+7. Let them communicate!
 --------
 
-TODO:
-- start server modules
-- start client
-- watch it work or troubleshoot
-- considerations: tunnel through SSH for PostgreSQL
+Okay, now the time of truth and justice has come. It is time to check, if the setup is actually working and start up your HoneyConnector anti-sniffing operations. First start the server modules with python. After they made clear statments that they are listening, start the client.
+
+The client now should first start filling the queue and conduct the first bait connection afterwards. Since the whole installation and configuration process was quite complex, there will probably problems. Since there are a lot of options where everything could go wrong, here are some things you can consider during troubleshooting: Did you change all database connection strings? Does your user have the permissions to write/access all folders needed?
+
+But if it runs now: Congratulations. You now have a working HoneyConnector to check for sniffing nodes. Here are some nice SQL statments which show you possible sniffers:
+
+Simple checking for multiple logins of one username:
+
+	SELECT COUNT(*), account FROM "loginEvents" GROUP BY account ORDER BY count DESC
+
+Checking for every reconnect two minutes after the credentials were generated:
+
+	SELECT * FROM "loginEvents" AS "le", "credentials" AS "cr", "knownNodes" as kn
+	WHERE le."account" = cr."username"
+	AND le."timestamp" - cr."date" > interval '2 minutes'
+	AND cr."node" = kn."fingerprint"
+	ORDER BY "timestamp" ASC
+
+And don't forget, always double check everything before you report something.
