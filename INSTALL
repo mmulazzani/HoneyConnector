@@ -31,7 +31,7 @@ The following packages should be installed on the machine of the client:
 tor
 
 The following packages should be installed on the machine of the IMAP server module:  
-mysql-server dovecot-imapd dovecot-mysql postfix postfix-mysql python2.7-mysqldb
+mysql-server dovecot-imapd dovecot-mysql dovecot-pop3d postfix postfix-mysql python2.7-mysqldb
 (please note: This will remove exim4 because of dependency blocks, so you can simply press "y" when apt wants do resolve some conflicts)
 
 
@@ -114,12 +114,13 @@ First, create a new MySQL database on the IMAP server called "mailserver". Then 
 
 Next up, you need to change the domain in the database to the one you will be using for the IMAP HoneyConnector. Go into the database "virtual_domains" and change the entry "example.com" to your domain. Why is the domain important? Because it's part of the username. And it makes the connection more credible.
 
-TODO:
-- import configs
-- change domain in configs
-- change dataabse in configs
-- make sure everything is chmodded
-- restart sevices
+Now, delete everything in /etc/dovecot/ or move it elsewhere. Now move the "dovecot.conf" and "dovecot-sql.conf" from the "config" folger there. In "dovecot.conf", you can change "postmaster_address". In "dovecot-sql.conf", change you mysql connection string in line 133 at the bottom, so it fits to the new user you created for this. Also, create the folder "/var/vmail" and make sure the mail-user and the HoneyConnector script user can write there.
+
+Next up, same thing with postfix: Delete every *.cf file in /etc/postfix, and move all *.cf files there. In "main.cf", set "myhostname" to your domain name, add it to "mydestination", and also put your domain name in the file "/etc/mailname". You will also have to change the MySQL database connectoin data in every *.cf file contianing mysql in its name.
+
+Now restart both the dovecot and the postfix service, and this fancy stuff in the backend should be good to go. Back to those Python files - now let's modify some lines in "server/IMAPtest.py".
+
+First, in line 13, enter your domain of the mail server. And then, in line 18 and 29, you will need to modify the MySQL connection data. Depending on how much disk IO your server can handle, you can modify the range of nonsensical messages in line 55.
 
 On the IMAP server, you will need another module for actually logging the login attempts to the shared PostgreSQL database. For this, use "logging/LogExtractor.py". In line 13 there, change the @domain.part, so it shows the domain with a preceeding @. Additionally, you will need to change the database connection string at line 15.
 
