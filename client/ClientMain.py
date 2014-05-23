@@ -21,7 +21,7 @@ from stem.util import term
 # the port Tor runs on
 SOCKS_PORT = 7000
 # the connection to the common PostgreSQL database with databasename, user, host and the password used
-dbConnectionString = "dbname='torlog' user='logger' host='127.0.0.1' password='H0f3hL0VUyXCrZpunVUVnhsob'"
+dbConnectionString = "dbname='honeyconnector' user='honeyconnector' host='127.0.0.1' password='H0f3hL0VUyXCrZpunVUVnhsob'"
 # the control port for HoneyConnector control messages
 port = 38742
 
@@ -434,7 +434,7 @@ def testTorNode(dbConnection, currentNode):
             # test IMAP
             try:
                 print "Node supports IMAP, using honey connection"
-                testIMAP(currentNode, "37.187.52.237", "hypermailer.net")
+                testIMAP(currentNode, "192.168.1.2", "hypermailer.net")
                 currentNode.madeIMAPLogin = True
             except (socket.error, socks.Socks5Error, socks.GeneralProxyError, socks.ProxyError), e:
                 print "problems with allocating IMAP socket", e.message, traceback.format_exc()
@@ -446,7 +446,7 @@ def testTorNode(dbConnection, currentNode):
             # test FTP
             try:
                 print "Node supports FTP, using honey connection"
-                testFTP(currentNode, "88.198.161.146")
+                testFTP(currentNode, "192.168.1.3")
                 currentNode.madeFTPLogin = True
             except (socket.error, socks.Socks5Error, socks.GeneralProxyError, socks.ProxyError), e:
                 print "problems with allocating FTP socket", e.message, traceback.format_exc()
